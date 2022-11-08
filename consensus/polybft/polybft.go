@@ -192,7 +192,7 @@ func (p *Polybft) Initialize() error {
 	}
 
 	p.state = stt
-	p.validatorsCache = newValidatorsSnapshotCache(p.config.Logger, stt, p.consensusConfig.EpochSize, p.blockchain)
+	p.validatorsCache = newValidatorsSnapshotCache(p.config.Logger, stt, p.blockchain)
 
 	// create runtime
 	p.initRuntime()
