@@ -207,7 +207,7 @@ func TestConsensusRuntime_isEndOfEpoch_NotReachedEnd(t *testing.T) {
 		runtime.epoch.FirstBlockInEpoch = c.firstBlockInEpoch
 		assert.False(
 			t,
-			runtime.isEndOfEpoch(c.parentBlockNumber+1),
+			runtime.isFixedSizeOfEpochMet(c.parentBlockNumber+1),
 			fmt.Sprintf(
 				"Not expected end of epoch for epoch size=%v and parent block number=%v",
 				c.epochSize,
@@ -245,7 +245,7 @@ func TestConsensusRuntime_isEndOfEpoch_ReachedEnd(t *testing.T) {
 		runtime.epoch.FirstBlockInEpoch = c.firstBlockInEpoch
 		assert.True(
 			t,
-			runtime.isEndOfEpoch(c.parentBlockNumber),
+			runtime.isFixedSizeOfEpochMet(c.parentBlockNumber),
 			fmt.Sprintf(
 				"Not expected end of epoch for epoch size=%v and parent block number=%v",
 				c.epochSize,
