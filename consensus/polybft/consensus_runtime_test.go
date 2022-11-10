@@ -417,13 +417,13 @@ func TestConsensusRuntime_OnBlockInserted_EndOfEpoch(t *testing.T) {
 		validatorsCount = 7
 	)
 
+	currentEpochNumber := getEpochNumber(t, epochSize, epochSize)
 	validatorSet := newTestValidators(validatorsCount).getPublicIdentities()
-	header, headerMap := createTestBlocks(t, epochSize, epochSize, validatorSet)
+	header := &types.Header{Number: epochSize, ExtraData: createTestExtraForAccounts(t, currentEpochNumber, validatorSet, nil)}
 	builtBlock := consensus.BuildBlock(consensus.BuildBlockParams{
 		Header: header,
 	})
 
-	currentEpochNumber := getEpochNumber(t, header.Number, epochSize)
 	newEpochNumber := currentEpochNumber + 1
 	systemStateMock := new(systemStateMock)
 	systemStateMock.On("GetEpoch").Return(newEpochNumber).Once()
@@ -431,7 +431,6 @@ func TestConsensusRuntime_OnBlockInserted_EndOfEpoch(t *testing.T) {
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
 	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
-	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	polybftBackendMock := new(polybftBackendMock)
 	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validatorSet).Once()
@@ -1057,7 +1056,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 	t.Parallel()
 
 	const (
-		epoch              = uint64(3)
+		newEpoch           = uint64(3)
 		epochSize          = uint64(10)
 		nextCommittedIndex = uint64(10)
 		stateSyncsCount    = 20
@@ -1069,20 +1068,18 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 	validatorAccs := newTestValidatorsWithAliases(validatorIds)
 	validators := validatorAccs.getPublicIdentities()
 
-	header := &types.Header{Number: epoch*epochSize + 3}
-	header, headerMap := createTestBlocks(t, epoch*epochSize+3, epochSize, validators)
+	header := &types.Header{Number: newEpoch * epochSize, ExtraData: createTestExtraForAccounts(t, newEpoch-1, validators, nil)}
 
 	transportMock := new(transportMock)
 	transportMock.On("Multicast", mock.Anything).Once()
 
 	systemStateMock := new(systemStateMock)
 	systemStateMock.On("GetNextCommittedIndex").Return(nextCommittedIndex, nil).Once()
-	systemStateMock.On("GetEpoch").Return(epoch, nil).Once()
+	systemStateMock.On("GetEpoch").Return(newEpoch, nil).Once()
 
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
 	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
-	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	polybftBackendMock := new(polybftBackendMock)
 	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validators).Once()
@@ -1105,15 +1102,15 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 	}
 
 	require.NoError(t, runtime.restartEpoch(header))
-	require.Equal(t, epoch, runtime.epoch.Number)
+	require.Equal(t, newEpoch, runtime.epoch.Number)
 	require.Equal(t, len(validatorIds), len(runtime.epoch.Validators))
 	require.Equal(t, header.Number, runtime.lastBuiltBlock.Number)
 	require.True(t, runtime.isActiveValidator())
-	require.True(t, state.isEpochInserted(epoch))
+	require.True(t, state.isEpochInserted(newEpoch))
 
 	commitment := runtime.epoch.Commitment
 	require.NotNil(t, commitment)
-	require.Equal(t, epoch, commitment.Epoch)
+	require.Equal(t, newEpoch, commitment.Epoch)
 
 	commitmentHash, err := commitment.Hash()
 	require.NoError(t, err)
@@ -1121,7 +1118,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, stateSyncsTrie.Hash(), commitment.MerkleTree.Hash())
 
-	votes, err := state.getMessageVotes(epoch, commitmentHash.Bytes())
+	votes, err := state.getMessageVotes(newEpoch, commitmentHash.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, 1, len(votes))
 	require.Equal(t, localValidator.Key().String(), votes[0].From)
@@ -1319,8 +1316,9 @@ func TestConsensusRuntime_calculateUptime_SecondEpoch(t *testing.T) {
 			Key:            validators.getValidator("A").Key(),
 		},
 		epoch: &epochMetadata{
-			Number:     epoch,
-			Validators: validators.getPublicIdentities(),
+			Number:            epoch,
+			Validators:        validators.getPublicIdentities(),
+			FirstBlockInEpoch: epochStartBlock,
 		},
 		lastBuiltBlock: lastBuiltBlock,
 	}
