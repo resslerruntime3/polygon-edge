@@ -338,7 +338,7 @@ func (c *consensusRuntime) FSM() error {
 	slash := false
 
 	pendingBlockNumber := parent.Number + 1
-	isEndOfSprint := c.isEndOfSprint(pendingBlockNumber)
+	isEndOfSprint := slash || c.isFixedSizeOfSprintMet(pendingBlockNumber)
 	isEndOfEpoch := slash || c.isFixedSizeOfEpochMet(pendingBlockNumber)
 
 	valSet, err := NewValidatorSet(epoch.Validators, c.logger)
@@ -925,9 +925,11 @@ func (c *consensusRuntime) isFixedSizeOfEpochMet(blockNumber uint64) bool {
 	return epoch.FirstBlockInEpoch+c.config.PolyBFTConfig.EpochSize-1 == blockNumber
 }
 
-// isEndOfSprint checks if an end of an sprint is reached with the current block
-func (c *consensusRuntime) isEndOfSprint(blockNumber uint64) bool {
-	return isEndOfPeriod(blockNumber, c.config.PolyBFTConfig.SprintSize)
+// isFixedSizeOfSprintMet checks if an end of an sprint is reached with the current block
+func (c *consensusRuntime) isFixedSizeOfSprintMet(blockNumber uint64) bool {
+	epoch := c.getEpoch()
+
+	return epoch.FirstBlockInEpoch+c.config.PolyBFTConfig.SprintSize-1 == blockNumber
 }
 
 // getSystemState builds SystemState instance for the most current block header
