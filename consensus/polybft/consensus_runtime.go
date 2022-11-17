@@ -1290,8 +1290,8 @@ func (c *consensusRuntime) getFirstBlockOfEpoch(epochNumber uint64, latestHeader
 	}
 
 	blockHeader := latestHeader
-	blockExtra, err := GetIbftExtra(latestHeader.ExtraData)
 
+	blockExtra, err := GetIbftExtra(latestHeader.ExtraData)
 	if err != nil {
 		return 0, err
 	}
