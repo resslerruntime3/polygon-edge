@@ -1332,7 +1332,7 @@ func TestConsensusRuntime_calculateUptime_SecondEpoch(t *testing.T) {
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	polybftBackendMock := new(polybftBackendMock)
-	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validators.getPublicIdentities()).Once()
+	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validators.getPublicIdentities()).Twice()
 
 	consensusRuntime := &consensusRuntime{
 		config: &runtimeConfig{
