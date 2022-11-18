@@ -756,19 +756,6 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 	blockHeader := currentBlock
 	epochID := epoch.Number
 
-	calculateUptimeForBlock := func(blockExtra *Extra, validators AccountSet) error {
-		signers, err := validators.GetFilteredValidators(blockExtra.Parent.Bitmap)
-		if err != nil {
-			return err
-		}
-
-		for _, a := range signers.GetAddresses() {
-			uptimeCounter[a]++
-		}
-
-		return nil
-	}
-
 	blockExtra, err := GetIbftExtra(currentBlock.ExtraData)
 	if err != nil {
 		return nil, err
@@ -776,7 +763,7 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 
 	// calculate uptime for current epoch
 	for blockHeader.Number > epoch.FirstBlockInEpoch {
-		if err := calculateUptimeForBlock(blockExtra, epoch.Validators); err != nil {
+		if err := getSealersForBlock(uptimeCounter, blockExtra, epoch.Validators); err != nil {
 			return nil, err
 		}
 
@@ -792,15 +779,13 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 				return nil, err
 			}
 
-			if err := calculateUptimeForBlock(blockExtra, validators); err != nil {
+			if err := getSealersForBlock(uptimeCounter, blockExtra, validators); err != nil {
 				return nil, err
 			}
 
 			blockHeader, blockExtra, err = c.getBlockData(blockHeader.Number - 1)
 		}
 	}
-
-	uptime := Uptime{EpochID: epochID}
 
 	// include the data in the uptime counter in a deterministic way
 	addrSet := []types.Address{}
@@ -813,6 +798,7 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 		return bytes.Compare(addrSet[i][:], addrSet[j][:]) > 0
 	})
 
+	uptime := Uptime{EpochID: epochID}
 	for _, addr := range addrSet {
 		uptime.addValidatorUptime(addr, uptimeCounter[addr])
 	}
@@ -1362,4 +1348,19 @@ func createExitTree(exitEvents []*ExitEvent) (*MerkleTree, error) {
 	}
 
 	return NewMerkleTree(data)
+}
+
+// getSealersForBlock checks who sealed a given block and updates the counter
+func getSealersForBlock(sealersCounter map[types.Address]uint64,
+	blockExtra *Extra, validators AccountSet) error {
+	signers, err := validators.GetFilteredValidators(blockExtra.Parent.Bitmap)
+	if err != nil {
+		return err
+	}
+
+	for _, a := range signers.GetAddresses() {
+		sealersCounter[a]++
+	}
+
+	return nil
 }
