@@ -346,7 +346,7 @@ func (c *consensusRuntime) FSM() error {
 		return fmt.Errorf("cannot create validator set for fsm: %w", err)
 	}
 
-	iterationNumber, err := getNumberOfIteration(parent, epoch.Number, c)
+	iterationNumber, err := c.getNumberOfIteration(parent, epoch)
 	if err != nil {
 		return fmt.Errorf("cannot get number of iteration: %w", err)
 	}
@@ -401,10 +401,10 @@ func (c *consensusRuntime) FSM() error {
 }
 
 // getNumberOfIteration returns number of iteration that are needed for the proposer calculation
-func getNumberOfIteration(parent *types.Header, epochNumber uint64, c *consensusRuntime) (uint64, error) {
+func (c *consensusRuntime) getNumberOfIteration(parent *types.Header, epoch *epochMetadata) (uint64, error) {
 	iterationNumber := uint64(0)
 	currentHeader := parent
-	lastBlockOfPreviousEpoch := getEndEpochBlockNumber(epochNumber-1, c.config.PolyBFTConfig.EpochSize)
+	lastBlockOfPreviousEpoch := epoch.FirstBlockInEpoch - 1
 
 	for currentHeader.Number > lastBlockOfPreviousEpoch {
 		blockExtra, err := GetIbftExtra(currentHeader.ExtraData)
