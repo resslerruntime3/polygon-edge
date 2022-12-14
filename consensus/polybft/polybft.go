@@ -15,12 +15,10 @@ import (
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/helper/progress"
 	"github.com/0xPolygon/polygon-edge/network"
-	"github.com/0xPolygon/polygon-edge/relayer"
 	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/0xPolygon/polygon-edge/syncer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/hashicorp/go-hclog"
-	"github.com/umbracle/ethgo"
 )
 
 const (
@@ -110,9 +108,6 @@ type Polybft struct {
 
 	// tx pool as interface
 	txPool txPoolInterface
-
-	// relayer instance
-	relayer *relayer.Relayer
 }
 
 func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *state.Transition) error {
@@ -208,17 +203,6 @@ func (p *Polybft) Initialize() error {
 		return fmt.Errorf("topic subscription failed: %w", err)
 	}
 
-	// create relayer
-	if p.consensusConfig.IsBridgeEnabled() {
-		p.relayer = relayer.NewRelayer(
-			p.dataDir,
-			p.config.JSONRPCAddr.String(),
-			ethgo.Address(p.consensusConfig.StateReceiverAddr),
-			p.logger.Named("relayer"),
-			p.key,
-		)
-	}
-
 	return nil
 }
 
@@ -252,13 +236,6 @@ func (p *Polybft) Start() error {
 	// start pbft process
 	if err := p.startRuntime(); err != nil {
 		return fmt.Errorf("consensus runtime start failed: %w", err)
-	}
-
-	// start relayer
-	if p.consensusConfig.IsBridgeEnabled() && p.relayer != nil {
-		if err := p.relayer.Start(); err != nil {
-			return fmt.Errorf("failed to start relayer: %w", err)
-		}
 	}
 
 	return nil
