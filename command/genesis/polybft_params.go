@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -203,7 +204,7 @@ func (p *genesisParams) getGenesisValidators() ([]*polybft.Validator, error) {
 		return validators, nil
 	}
 
-	return ReadValidatorsByRegexp("", p.polyBftValidatorPrefixPath)
+	return ReadValidatorsByRegexp(path.Dir(p.genesisPath), p.polyBftValidatorPrefixPath)
 }
 
 func (p *genesisParams) generatePolyBftGenesis() error {

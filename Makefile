@@ -70,6 +70,7 @@ destroy-local:
 
 .PHONY: run-local-polybft
 run-local-polybft:
+	$(MAKE) compile-core-contracts
 	EDGE_CONSENSUS=polybft docker-compose -f ./docker/local/docker-compose.yml up -d --build
 
 .PHONY: stop-local-polybft

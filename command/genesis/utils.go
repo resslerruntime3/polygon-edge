@@ -3,10 +3,12 @@ package genesis
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"math/big"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +28,11 @@ const (
 	StatError   = "StatError"
 	ExistsError = "ExistsError"
 )
+
+type validatorDataPaths struct {
+	paths      []string
+	pathPrefix string
+}
 
 // GenesisGenError is a specific error type for generating genesis
 type GenesisGenError struct {
@@ -98,43 +105,61 @@ func parsePremineInfo(premineInfoRaw string) (*premineInfo, error) {
 	return &premineInfo{address: address, balance: amount}, nil
 }
 
+// matchValidatorDataDirs uses regexp to match validator directories which must have the last
+// three digits: non-digit, hyphen(-), digit.
+// Found paths are appended to validatorDataPaths.paths
+func (v *validatorDataPaths) matchValidatorDataDirs(path string, info fs.FileInfo, _ error) error {
+	if info.IsDir() && strings.HasPrefix(info.Name(), filepath.Base(v.pathPrefix)) {
+		// match paths that have a number as the last digit /tmp/data-1, /tmp/test-data-2, etc.
+		// matches any string that has last 3 chars: not-digit, - , digit
+		match, _ := regexp.MatchString(`^.*\D-\d{1}$`, strings.TrimSpace(path))
+		if match {
+			v.paths = append(v.paths, path)
+		}
+	}
+
+	return nil
+}
+
+// ReadValidatorsByRegexp trys to find validator secrets when local secrets manager is used.
+// Validator folders must end with a hyphen (-) and a digit ( data-1, test-data-2, etc. ).
+//
+// Firstly the folder of genesis.json file will be searched for validator data folders.
+// If validators data is not in the same folder with the genesis.json file, it will try to find
+// validator data folders from the prefix, if it is defined as absolute path
 func ReadValidatorsByRegexp(dir, prefix string) ([]*polybft.Validator, error) {
 	if dir == "" {
 		dir = "."
 	}
 
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return nil, err
+	validatorPaths := validatorDataPaths{
+		pathPrefix: prefix,
 	}
 
-	validCnt := 0
-
-	for _, file := range files {
-		if file.IsDir() && strings.HasPrefix(file.Name(), prefix) {
-			files[validCnt] = file
-			validCnt++
-		}
+	// check the root folder of genesis file for validator data
+	if err := filepath.Walk(dir, validatorPaths.matchValidatorDataDirs); err != nil {
+		return nil, fmt.Errorf("could not find validator on the designated path error=%w", err)
 	}
 
-	files = files[0:validCnt]
+	// check the absolute path of validator prefix
+	// used to match when validator secrets folders are not in the same root as genesis.json file
+	if err := filepath.Walk(path.Dir(prefix), validatorPaths.matchValidatorDataDirs); err != nil {
+		return nil, fmt.Errorf("could not find validator on the designated path error=%w", err)
+	}
 
 	// we must sort files by number after the prefix not by name string
-	sort.Slice(files, func(i, j int) bool {
-		f := strings.TrimPrefix(files[i].Name(), prefix)
-		s := strings.TrimPrefix(files[j].Name(), prefix)
-		num1, _ := strconv.Atoi(strings.TrimLeft(f, "-"))
-		num2, _ := strconv.Atoi(strings.TrimLeft(s, "-"))
+	// the last character is always a digit
+	sort.Slice(validatorPaths.paths, func(i, j int) bool {
+		num1, _ := strconv.Atoi(validatorPaths.paths[i][len(validatorPaths.paths[i])-1:])
+		num2, _ := strconv.Atoi(validatorPaths.paths[j][len(validatorPaths.paths[j])-1:])
 
 		return num1 < num2
 	})
 
-	validators := make([]*polybft.Validator, len(files))
+	validators := make([]*polybft.Validator, len(validatorPaths.paths))
 
-	for i, file := range files {
-		path := filepath.Join(dir, file.Name())
-
-		account, nodeID, err := getSecrets(path)
+	for i, valPath := range validatorPaths.paths {
+		account, nodeID, err := getSecrets(valPath)
 		if err != nil {
 			return nil, err
 		}
