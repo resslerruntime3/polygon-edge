@@ -64,14 +64,21 @@ run-local:
 stop-local:
 	EDGE_CONSENSUS=ibft docker-compose -f ./docker/local/docker-compose.yml stop
 
-.PHONY: run-local
-run-local-polybft:
-	$(MAKE) compile-core-contracts
-	EDGE_CONSENSUS=polybft docker-compose -f ./docker/local/docker-compose.yml up -d --build 
+.PHONY: destroy-local
+destroy-local:
+	EDGE_CONSENSUS=ibft docker-compose -f ./docker/local/docker-compose.yml down -v
 
-.PHONY: stop-local
+.PHONY: run-local-polybft
+run-local-polybft:
+	EDGE_CONSENSUS=polybft docker-compose -f ./docker/local/docker-compose.yml up -d --build
+
+.PHONY: stop-local-polybft
 stop-local-polybft:
 	EDGE_CONSENSUS=polybft docker-compose -f ./docker/local/docker-compose.yml stop
+
+.PHONY: destroy-local-polybft
+destroy-local-polybft:
+	EDGE_CONSENSUS=polybft docker-compose -f ./docker/local/docker-compose.yml down -v
 
 
 .PHONY: compile-core-contracts

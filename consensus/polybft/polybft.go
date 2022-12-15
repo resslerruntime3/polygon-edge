@@ -131,7 +131,7 @@ func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *st
 		}
 
 		if err = initContract(contracts.ValidatorSetContract, input, "ChildValidatorSet", transition); err != nil {
-			return err
+			return fmt.Errorf("ChildValidatorSet SC call failed! error: %w", err)
 		}
 
 		input, err = nativeTokenInitializer.Encode(
