@@ -178,7 +178,7 @@ func (c *consensusRuntime) AddLog(eventLog *ethgo.Log) {
 		return
 	}
 
-	if err := c.state.insertStateSyncEvent(event); err != nil {
+	if err := c.state.StateSyncStore.insertStateSyncEvent(event); err != nil {
 		c.logger.Error("failed to insert state sync event", "hash", eventLog.TransactionHash, "error", err)
 
 		return
@@ -227,7 +227,7 @@ func (c *consensusRuntime) createCommitmentAndBundles(txs []*types.Transaction) 
 		return nil
 	}
 
-	if err := c.state.insertCommitmentMessage(commitment); err != nil {
+	if err := c.state.StateSyncStore.insertCommitmentMessage(commitment); err != nil {
 		return fmt.Errorf("insert commitment message error: %w", err)
 	}
 
@@ -301,7 +301,7 @@ func (c *consensusRuntime) populateFsmIfBridgeEnabled(
 	}
 
 	if isEndOfSprint {
-		if err := c.state.cleanCommitments(nextStateSyncExecutionIdx); err != nil {
+		if err := c.state.StateSyncStore.cleanCommitments(nextStateSyncExecutionIdx); err != nil {
 			return fmt.Errorf("cannot clean commitments: %w", err)
 		}
 	}
@@ -451,11 +451,11 @@ func (c *consensusRuntime) restartEpoch(header *types.Header) error {
 
 	updateEpochMetrics(*epoch)
 
-	if err := c.state.cleanEpochsFromDB(); err != nil {
+	if err := c.state.EpochStore.cleanEpochsFromDB(); err != nil {
 		c.logger.Error("Could not clean previous epochs from db.", "error", err)
 	}
 
-	if err := c.state.insertEpoch(epoch.Number); err != nil {
+	if err := c.state.EpochStore.insertEpoch(epoch.Number); err != nil {
 		return fmt.Errorf("an error occurred while inserting new epoch in db. Reason: %w", err)
 	}
 
@@ -494,7 +494,7 @@ func (c *consensusRuntime) restartEpoch(header *types.Header) error {
 func (c *consensusRuntime) buildCommitment(epoch, fromIndex uint64) (*Commitment, error) {
 	toIndex := fromIndex + stateSyncMainBundleSize - 1
 	// if it is not already built in the previous epoch
-	stateSyncEvents, err := c.state.getStateSyncEventsForCommitment(fromIndex, toIndex)
+	stateSyncEvents, err := c.state.StateSyncStore.getStateSyncEventsForCommitment(fromIndex, toIndex)
 	if err != nil {
 		if errors.Is(err, errNotEnoughStateSyncs) {
 			c.logger.Debug("[buildCommitment] Not enough state syncs to build a commitment",
@@ -528,7 +528,7 @@ func (c *consensusRuntime) buildCommitment(epoch, fromIndex uint64) (*Commitment
 		Signature: signature,
 	}
 
-	if _, err = c.state.insertMessageVote(epoch, hashBytes, sig); err != nil {
+	if _, err = c.state.StateSyncStore.insertMessageVote(epoch, hashBytes, sig); err != nil {
 		return nil, fmt.Errorf(
 			"failed to insert signature for hash=%v to the state. Error: %w",
 			hex.EncodeToString(hashBytes),
@@ -597,7 +597,7 @@ func (c *consensusRuntime) buildBundles(commitment *Commitment, commitmentMsg *C
 		"nextExecutionIndex", stateSyncExecutionIndex,
 	)
 
-	return c.state.insertBundles(bundleProofs)
+	return c.state.StateSyncStore.insertBundles(bundleProofs)
 }
 
 // getAggSignatureForCommitmentMessage creates aggregated signatures for given commitment
@@ -619,7 +619,7 @@ func (c *consensusRuntime) getAggSignatureForCommitmentMessage(
 	}
 
 	// get all the votes from the database for this commitment
-	votes, err := c.state.getMessageVotes(epoch.Number, commitmentHash.Bytes())
+	votes, err := c.state.StateSyncStore.getMessageVotes(epoch.Number, commitmentHash.Bytes())
 	if err != nil {
 		return Signature{}, nil, err
 	}
@@ -669,7 +669,7 @@ func (c *consensusRuntime) getAggSignatureForCommitmentMessage(
 func (c *consensusRuntime) getStateSyncEventsForBundle(from, bundleSize uint64) ([]*StateSyncEvent, error) {
 	until := bundleSize + from - 1
 
-	return c.state.getStateSyncEventsForCommitment(from, until)
+	return c.state.StateSyncStore.getStateSyncEventsForCommitment(from, until)
 }
 
 // startEventTracker starts the event tracker that listens to state sync events
@@ -721,7 +721,7 @@ func (c *consensusRuntime) deliverMessage(msg *TransportMessage) error {
 		return err
 	}
 
-	numSignatures, err := c.state.insertMessageVote(msg.EpochNumber, msg.Hash, msgVote)
+	numSignatures, err := c.state.StateSyncStore.insertMessageVote(msg.EpochNumber, msg.Hash, msgVote)
 	if err != nil {
 		return fmt.Errorf("error inserting message vote: %w", err)
 	}
@@ -843,12 +843,12 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 
 // InsertExitEvents is an implementation of checkpointBackend interface
 func (c *consensusRuntime) InsertExitEvents(exitEvents []*ExitEvent) error {
-	return c.state.insertExitEvents(exitEvents)
+	return c.state.CheckpointStore.insertExitEvents(exitEvents)
 }
 
 // BuildEventRoot is an implementation of checkpointBackend interface
 func (c *consensusRuntime) BuildEventRoot(epoch uint64, nonCommittedExitEvents []*ExitEvent) (types.Hash, error) {
-	exitEvents, err := c.state.getExitEventsByEpoch(epoch)
+	exitEvents, err := c.state.CheckpointStore.getExitEventsByEpoch(epoch)
 	if err != nil {
 		return types.ZeroHash, err
 	}
@@ -868,7 +868,7 @@ func (c *consensusRuntime) BuildEventRoot(epoch uint64, nonCommittedExitEvents [
 
 // GenerateExitProof generates proof of exit
 func (c *consensusRuntime) GenerateExitProof(exitID, epoch, checkpointBlock uint64) (types.ExitProof, error) {
-	exitEvent, err := c.state.getExitEvent(exitID, epoch)
+	exitEvent, err := c.state.CheckpointStore.getExitEvent(exitID, epoch)
 	if err != nil {
 		return types.ExitProof{}, err
 	}
@@ -878,7 +878,7 @@ func (c *consensusRuntime) GenerateExitProof(exitID, epoch, checkpointBlock uint
 		return types.ExitProof{}, err
 	}
 
-	exitEvents, err := c.state.getExitEventsForProof(epoch, checkpointBlock)
+	exitEvents, err := c.state.CheckpointStore.getExitEventsForProof(epoch, checkpointBlock)
 	if err != nil {
 		return types.ExitProof{}, err
 	}
@@ -906,7 +906,7 @@ func (c *consensusRuntime) GenerateExitProof(exitID, epoch, checkpointBlock uint
 
 // GetStateSyncProof returns the proof of the bundle for the state sync
 func (c *consensusRuntime) GetStateSyncProof(stateSyncID uint64) (*types.StateSyncProof, error) {
-	bundlesToExecute, err := c.state.getBundles(stateSyncID, 1)
+	bundlesToExecute, err := c.state.StateSyncStore.getBundles(stateSyncID, 1)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get bundles: %w", err)
 	}

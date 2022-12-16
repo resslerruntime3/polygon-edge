@@ -194,7 +194,7 @@ func TestFSM_BuildProposal_WithExitEvents(t *testing.T) {
 	require.Equal(t, parentBlockNumber+1, block.Number())
 	require.Equal(t, parent.Hash, block.ParentHash())
 
-	events, err := runtime.state.getExitEventsByEpoch(epoch)
+	events, err := runtime.state.CheckpointStore.getExitEventsByEpoch(epoch)
 	require.NoError(t, err)
 	require.Len(t, events, numOfReceipts)
 
@@ -248,7 +248,7 @@ func TestFSM_BuildProposal_WithExitEvents_ErrorInDecoding(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, proposal)
 
-	events, err := runtime.state.getExitEventsByEpoch(epoch)
+	events, err := runtime.state.CheckpointStore.getExitEventsByEpoch(epoch)
 	require.NoError(t, err)
 	require.Len(t, events, 0)
 

@@ -59,7 +59,7 @@ func (v *validatorsSnapshotCache) GetSnapshot(blockNumber uint64, parents []*typ
 			break
 		}
 
-		dbSnapshot, err := v.state.getValidatorSnapshot(currentEpochNumber)
+		dbSnapshot, err := v.state.EpochStore.getValidatorSnapshot(currentEpochNumber)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to retrieve validators snapshot from the database for epoch=%d: %w",
@@ -210,7 +210,7 @@ func (v *validatorsSnapshotCache) storeSnapshot(epoch uint64, snapshot AccountSe
 	copySnap := snapshot.Copy()
 	v.snapshots[epoch] = copySnap
 
-	if err := v.state.insertValidatorSnapshot(epoch, copySnap); err != nil {
+	if err := v.state.EpochStore.insertValidatorSnapshot(epoch, copySnap); err != nil {
 		return fmt.Errorf("failed to insert validator snapshot for epoch %d to the database: %w", epoch, err)
 	}
 
@@ -243,7 +243,7 @@ func (v *validatorsSnapshotCache) cleanup() error {
 
 		v.snapshots = cache
 
-		return v.state.cleanValidatorSnapshotsFromDB(latestEpoch)
+		return v.state.EpochStore.cleanValidatorSnapshotsFromDB(latestEpoch)
 	}
 
 	return nil

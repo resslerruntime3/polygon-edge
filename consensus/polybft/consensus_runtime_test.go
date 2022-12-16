@@ -48,7 +48,7 @@ func TestConsensusRuntime_GetVotes(t *testing.T) {
 	commitment, _, _ := buildCommitmentAndStateSyncs(t, stateSyncsCount, epoch, bundleSize, 0)
 
 	quorumSize := validatorAccounts.toValidatorSetWithError(t).quorumSize
-	require.NoError(t, state.insertEpoch(epoch))
+	require.NoError(t, state.EpochStore.insertEpoch(epoch))
 
 	votesCount := quorumSize + 1
 	hash, err := commitment.Hash()
@@ -59,7 +59,7 @@ func TestConsensusRuntime_GetVotes(t *testing.T) {
 		signature, err := validator.mustSign(hash.Bytes()).Marshal()
 		require.NoError(t, err)
 
-		_, err = state.insertMessageVote(epoch, hash.Bytes(),
+		_, err = state.StateSyncStore.insertMessageVote(epoch, hash.Bytes(),
 			&MessageSignature{
 				From:      validator.Key().String(),
 				Signature: signature,
@@ -67,7 +67,7 @@ func TestConsensusRuntime_GetVotes(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	votes, err := runtime.state.getMessageVotes(runtime.epoch.Number, hash.Bytes())
+	votes, err := runtime.state.StateSyncStore.getMessageVotes(runtime.epoch.Number, hash.Bytes())
 	require.NoError(t, err)
 	require.Len(t, votes, int(votesCount))
 }
@@ -87,7 +87,7 @@ func TestConsensusRuntime_GetVotesError(t *testing.T) {
 	commitment, _, _ := buildCommitmentAndStateSyncs(t, 5, epoch, bundleSize, startIndex)
 	hash, err := commitment.Hash()
 	require.NoError(t, err)
-	_, err = runtime.state.getMessageVotes(epoch, hash.Bytes())
+	_, err = runtime.state.StateSyncStore.getMessageVotes(epoch, hash.Bytes())
 	assert.ErrorContains(t, err, "could not find")
 }
 
@@ -116,10 +116,10 @@ func TestConsensusRuntime_deliverMessage_MessageWhenEpochNotStarted(t *testing.T
 	hash := crypto.Keccak256Hash(generateRandomBytes(t)).Bytes()
 
 	// insert dummy epoch to the state
-	require.NoError(t, state.insertEpoch(epoch))
+	require.NoError(t, state.EpochStore.insertEpoch(epoch))
 
 	// insert dummy message vote
-	_, err := runtime.state.insertMessageVote(epoch, hash,
+	_, err := runtime.state.StateSyncStore.insertMessageVote(epoch, hash,
 		createTestMessageVote(t, hash, localValidator))
 	require.NoError(t, err)
 
@@ -135,7 +135,7 @@ func TestConsensusRuntime_deliverMessage_MessageWhenEpochNotStarted(t *testing.T
 
 	// assert that no additional message signatures aren't inserted into the consensus runtime state
 	// (other than the one we have previously inserted by ourselves)
-	signatures, err := runtime.state.getMessageVotes(epoch, hash)
+	signatures, err := runtime.state.StateSyncStore.getMessageVotes(epoch, hash)
 	require.NoError(t, err)
 	require.Len(t, signatures, 2)
 }
@@ -171,7 +171,7 @@ func TestConsensusRuntime_AddLog(t *testing.T) {
 	require.NoError(t, err)
 	runtime.AddLog(log)
 
-	stateSyncs, err := runtime.state.getStateSyncEventsForCommitment(1, 1)
+	stateSyncs, err := runtime.state.StateSyncStore.getStateSyncEventsForCommitment(1, 1)
 	require.NoError(t, err)
 	require.Len(t, stateSyncs, 1)
 	require.Equal(t, event.ID, stateSyncs[0].ID)
@@ -286,7 +286,7 @@ func TestConsensusRuntime_deliverMessage_EpochNotStarted(t *testing.T) {
 	t.Parallel()
 
 	state := newTestState(t)
-	err := state.insertEpoch(1)
+	err := state.EpochStore.insertEpoch(1)
 	assert.NoError(t, err)
 
 	// random node not among validator set
@@ -312,7 +312,7 @@ func TestConsensusRuntime_deliverMessage_EpochNotStarted(t *testing.T) {
 	err = runtime.deliverMessage(msg)
 	assert.ErrorContains(t, err, "not among the active validator set")
 
-	votes, err := state.getMessageVotes(1, msg.Hash)
+	votes, err := state.StateSyncStore.getMessageVotes(1, msg.Hash)
 	assert.NoError(t, err)
 	assert.Empty(t, votes)
 }
@@ -321,7 +321,7 @@ func TestConsensusRuntime_deliverMessage_ForExistingEpochAndCommitmentMessage(t 
 	t.Parallel()
 
 	state := newTestState(t)
-	err := state.insertEpoch(1)
+	err := state.EpochStore.insertEpoch(1)
 	require.NoError(t, err)
 
 	validators := newTestValidatorsWithAliases([]string{"SENDER", "RECEIVER"})
@@ -348,7 +348,7 @@ func TestConsensusRuntime_deliverMessage_ForExistingEpochAndCommitmentMessage(t 
 	err = runtime.deliverMessage(msg)
 	assert.NoError(t, err)
 
-	votes, err := state.getMessageVotes(1, msg.Hash)
+	votes, err := state.StateSyncStore.getMessageVotes(1, msg.Hash)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(votes))
 	assert.True(t, bytes.Equal(msg.Signature, votes[0].Signature))
@@ -358,7 +358,7 @@ func TestConsensusRuntime_deliverMessage_SenderMessageNotInCurrentValidatorset(t
 	t.Parallel()
 
 	state := newTestState(t)
-	err := state.insertEpoch(1)
+	err := state.EpochStore.insertEpoch(1)
 	require.NoError(t, err)
 
 	validators := newTestValidators(6)
@@ -433,7 +433,7 @@ func TestConsensusRuntime_OnBlockInserted_EndOfEpoch(t *testing.T) {
 	}
 	runtime.OnBlockInserted(builtBlock)
 
-	require.True(t, runtime.state.isEpochInserted(currentEpochNumber+1))
+	require.True(t, runtime.state.EpochStore.isEpochInserted(currentEpochNumber+1))
 	require.Equal(t, newEpochNumber, runtime.epoch.Number)
 
 	blockchainMock.AssertExpectations(t)
@@ -583,11 +583,11 @@ func TestConsensusRuntime_FSM_EndOfEpoch_BuildRegisterCommitment_And_Uptime(t *t
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	state := newTestState(t)
-	require.NoError(t, state.insertEpoch(epoch))
+	require.NoError(t, state.EpochStore.insertEpoch(epoch))
 
 	stateSyncs := generateStateSyncEvents(t, bundleSize, 0)
 	for _, event := range stateSyncs {
-		require.NoError(t, state.insertStateSyncEvent(event))
+		require.NoError(t, state.StateSyncStore.insertStateSyncEvent(event))
 	}
 
 	trie, err := createMerkleTree(stateSyncs, bundleSize)
@@ -603,7 +603,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_BuildRegisterCommitment_And_Uptime(t *t
 		require.NoError(t, err)
 		signatureRaw, err := signature.Marshal()
 		require.NoError(t, err)
-		_, err = state.insertMessageVote(epoch, hash.Bytes(), &MessageSignature{
+		_, err = state.StateSyncStore.insertMessageVote(epoch, hash.Bytes(), &MessageSignature{
 			From:      a.Ecdsa.Address().String(),
 			Signature: signatureRaw,
 		})
@@ -733,11 +733,11 @@ func TestConsensusRuntime_FSM_EndOfEpoch_BuildRegisterCommitment_QuorumNotReache
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	state := newTestState(t)
-	require.NoError(t, state.insertEpoch(epoch))
+	require.NoError(t, state.EpochStore.insertEpoch(epoch))
 
 	stateSyncs := generateStateSyncEvents(t, bundleSize, 0)
 	for _, event := range stateSyncs {
-		require.NoError(t, state.insertStateSyncEvent(event))
+		require.NoError(t, state.StateSyncStore.insertStateSyncEvent(event))
 	}
 
 	trie, err := createMerkleTree(stateSyncs, bundleSize)
@@ -751,7 +751,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_BuildRegisterCommitment_QuorumNotReache
 	validatorKey := validatorAccs.getValidator("C").Key()
 	signature, err := validatorKey.Sign(hash.Bytes())
 	require.NoError(t, err)
-	_, err = state.insertMessageVote(epoch, hash.Bytes(), &MessageSignature{
+	_, err = state.StateSyncStore.insertMessageVote(epoch, hash.Bytes(), &MessageSignature{
 		From:      validators[0].Address.String(),
 		Signature: signature,
 	})
@@ -847,7 +847,7 @@ func TestConsensusRuntime_FSM_EndOfSprint_HasBundlesToExecute(t *testing.T) {
 	)
 
 	state := newTestState(t)
-	err := state.insertEpoch(epochNumber)
+	err := state.EpochStore.insertEpoch(epochNumber)
 	require.NoError(t, err)
 
 	stateSyncs := insertTestStateSyncEvents(t, stateSyncsCount, fromIndex, state)
@@ -861,7 +861,7 @@ func TestConsensusRuntime_FSM_EndOfSprint_HasBundlesToExecute(t *testing.T) {
 		Message:      commitmentMsg,
 		AggSignature: Signature{},
 	}
-	require.NoError(t, state.insertCommitmentMessage(signedCommitmentMsg))
+	require.NoError(t, state.StateSyncStore.insertCommitmentMessage(signedCommitmentMsg))
 
 	validatorAccs := newTestValidatorsWithAliases([]string{"A", "B", "C", "D", "E", "F", "G"})
 	validatorSet := validatorAccs.getPublicIdentities()
@@ -1157,7 +1157,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_NoStateSyncEvents(t *testing
 	require.Equal(t, 3, len(runtime.epoch.Validators))
 	require.Equal(t, newCurrentHeader.Number, runtime.lastBuiltBlock.Number)
 	require.True(t, runtime.isActiveValidator())
-	require.True(t, state.isEpochInserted(1))
+	require.True(t, state.EpochStore.isEpochInserted(1))
 
 	systemStateMock.AssertExpectations(t)
 	blockchainMock.AssertExpectations(t)
@@ -1217,7 +1217,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 	require.Equal(t, len(validatorIds), len(runtime.epoch.Validators))
 	require.Equal(t, header.Number, runtime.lastBuiltBlock.Number)
 	require.True(t, runtime.isActiveValidator())
-	require.True(t, state.isEpochInserted(epoch))
+	require.True(t, state.EpochStore.isEpochInserted(epoch))
 
 	commitment := runtime.epoch.Commitment
 	require.NotNil(t, commitment)
@@ -1229,7 +1229,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, stateSyncsTrie.Hash(), commitment.MerkleTree.Hash())
 
-	votes, err := state.getMessageVotes(epoch, commitmentHash.Bytes())
+	votes, err := state.StateSyncStore.getMessageVotes(epoch, commitmentHash.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, 1, len(votes))
 	require.Equal(t, localValidator.Key().String(), votes[0].From)
@@ -1246,7 +1246,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 		signature, err := validator.mustSign(commitmentHash.Bytes()).Marshal()
 		require.NoError(t, err)
 
-		_, err = state.insertMessageVote(runtime.epoch.Number, commitmentHash.Bytes(),
+		_, err = state.StateSyncStore.insertMessageVote(runtime.epoch.Number, commitmentHash.Bytes(),
 			&MessageSignature{
 				From:      validator.Key().String(),
 				Signature: signature,
@@ -1344,7 +1344,7 @@ func TestConsensusRuntime_restartEpoch_NewEpochToRun_BuildCommitment(t *testing.
 	assert.True(t, runtime.isActiveValidator())
 
 	// check if new epoch is inserted
-	assert.True(t, state.isEpochInserted(newEpoch))
+	assert.True(t, state.EpochStore.isEpochInserted(newEpoch))
 
 	// check if new epoch is created
 	assert.NotNil(t, runtime.epoch)
@@ -1367,7 +1367,7 @@ func TestConsensusRuntime_restartEpoch_NewEpochToRun_BuildCommitment(t *testing.
 		validator := originalValidators.getValidator(validatorID)
 		signature, err := validator.mustSign(commitmentHash.Bytes()).Marshal()
 		require.NoError(t, err)
-		_, err = state.insertMessageVote(runtime.epoch.Number, commitmentHash.Bytes(),
+		_, err = state.StateSyncStore.insertMessageVote(runtime.epoch.Number, commitmentHash.Bytes(),
 			&MessageSignature{
 				From:      validator.Key().String(),
 				Signature: signature,
@@ -1487,7 +1487,7 @@ func TestConsensusRuntime_buildBundles_NoCommitment(t *testing.T) {
 	_, epoch := runtime.getLastBuiltBlockAndEpoch()
 	assert.NoError(t, runtime.buildBundles(epoch.Commitment, commitmentMsg, 0))
 
-	bundles, err := state.getBundles(0, 4)
+	bundles, err := state.StateSyncStore.getBundles(0, 4)
 
 	assert.NoError(t, err)
 	assert.Nil(t, bundles)
@@ -1517,7 +1517,7 @@ func TestConsensusRuntime_buildBundles(t *testing.T) {
 			AggregatedSignature: []byte{1, 1},
 		},
 	}
-	require.NoError(t, state.insertCommitmentMessage(commitmentMsgSigned))
+	require.NoError(t, state.StateSyncStore.insertCommitmentMessage(commitmentMsgSigned))
 
 	runtime := &consensusRuntime{
 		logger: hclog.NewNullLogger(),
@@ -1535,7 +1535,7 @@ func TestConsensusRuntime_buildBundles(t *testing.T) {
 	_, epochData := runtime.getLastBuiltBlockAndEpoch()
 	assert.NoError(t, runtime.buildBundles(epochData.Commitment, commitmentMsg, 0))
 
-	bundles, err := state.getBundles(fromIndex, maxBundlesPerSprint)
+	bundles, err := state.StateSyncStore.getBundles(fromIndex, maxBundlesPerSprint)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBundlesNumber, len(bundles))
 }
@@ -1570,11 +1570,11 @@ func TestConsensusRuntime_FSM_EndOfEpoch_OnBlockInserted(t *testing.T) {
 	txPool := new(txPoolMock)
 
 	state := newTestState(t)
-	require.NoError(t, state.insertEpoch(epoch))
+	require.NoError(t, state.EpochStore.insertEpoch(epoch))
 
 	stateSyncs := generateStateSyncEvents(t, stateSyncMainBundleSize, 0)
 	for _, event := range stateSyncs {
-		require.NoError(t, state.insertStateSyncEvent(event))
+		require.NoError(t, state.StateSyncStore.insertStateSyncEvent(event))
 	}
 
 	trie, err := createMerkleTree(stateSyncs, stateSyncBundleSize)
@@ -1589,7 +1589,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_OnBlockInserted(t *testing.T) {
 		require.NoError(t, err)
 		signatureRaw, err := signature.Marshal()
 		require.NoError(t, err)
-		_, err = state.insertMessageVote(epoch, hash.Bytes(), &MessageSignature{
+		_, err = state.StateSyncStore.insertMessageVote(epoch, hash.Bytes(), &MessageSignature{
 			From:      a.Ecdsa.Address().String(),
 			Signature: signatureRaw,
 		})
@@ -1659,7 +1659,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_OnBlockInserted(t *testing.T) {
 
 	runtime.OnBlockInserted(block)
 
-	commitmentMsgFromDB, err := state.getCommitmentMessage(toIndex)
+	commitmentMsgFromDB, err := state.StateSyncStore.getCommitmentMessage(toIndex)
 	assert.NoError(t, err)
 	assert.Equal(t, fromIndex, commitmentMsgFromDB.Message.FromIndex)
 	assert.Equal(t, toIndex, commitmentMsgFromDB.Message.ToIndex)
@@ -1667,7 +1667,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_OnBlockInserted(t *testing.T) {
 	assert.Equal(t, trie.Hash(), commitmentMsgFromDB.Message.MerkleRootHash)
 	assert.NotNil(t, commitmentMsgFromDB.AggSignature)
 
-	bundles, err := state.getBundles(fromIndex, maxBundlesPerSprint)
+	bundles, err := state.StateSyncStore.getBundles(fromIndex, maxBundlesPerSprint)
 	assert.NoError(t, err)
 	assert.Equal(t, 10, len(bundles))
 
@@ -2167,7 +2167,7 @@ func setupExitEventsForProofVerification(t *testing.T, state *State,
 	for i := uint64(1); i <= numOfBlocks; i++ {
 		for j := uint64(1); j <= numOfEventsPerBlock; j++ {
 			e := &ExitEvent{index, ethgo.ZeroAddress, ethgo.ZeroAddress, []byte{0, 1}, 1, i}
-			require.NoError(t, state.insertExitEvent(e))
+			require.NoError(t, state.CheckpointStore.insertExitEvent(e))
 
 			b, err := ExitEventABIType.Encode(e)
 
@@ -2302,7 +2302,7 @@ func insertTestStateSyncEvents(t *testing.T, numberOfEvents int, startIndex uint
 
 	stateSyncs := generateStateSyncEvents(t, numberOfEvents, startIndex)
 	for _, stateSync := range stateSyncs {
-		require.NoError(t, state.insertStateSyncEvent(stateSync))
+		require.NoError(t, state.StateSyncStore.insertStateSyncEvent(stateSync))
 	}
 
 	return stateSyncs
