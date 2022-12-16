@@ -199,10 +199,6 @@ func (p *Polybft) Initialize() error {
 
 	p.ibft = newIBFTConsensusWrapper(p.logger, p.runtime, p)
 
-	if err = p.subscribeToIbftTopic(); err != nil {
-		return fmt.Errorf("topic subscription failed: %w", err)
-	}
-
 	return nil
 }
 
@@ -220,6 +216,11 @@ func (p *Polybft) Start() error {
 		return fmt.Errorf("consensus runtime start - restart epoch failed: %w", err)
 	}
 
+	// subscribe to consensus engine messages
+	if err := p.subscribeToIbftTopic(); err != nil {
+		return fmt.Errorf("topic subscription failed: %w", err)
+	}
+
 	// start syncing
 	go func() {
 		blockHandler := func(b *types.Block) bool {
@@ -233,7 +234,7 @@ func (p *Polybft) Start() error {
 		}
 	}()
 
-	// start pbft process
+	// start consensus runtime
 	if err := p.startRuntime(); err != nil {
 		return fmt.Errorf("consensus runtime start failed: %w", err)
 	}
