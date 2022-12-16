@@ -545,7 +545,7 @@ func TestConsensusRuntime_FSM_NotEndOfEpoch_NotEndOfSprint(t *testing.T) {
 	assert.Equal(t, lastBlock.Number, runtime.fsm.parent.Number)
 
 	address := types.Address(runtime.config.Key.Address())
-	assert.True(t, runtime.fsm.ValidatorSet().Includes(address))
+	assert.True(t, runtime.fsm.ValidatorSet().Accounts().ContainsAddress(address))
 
 	assert.NotNil(t, runtime.fsm.blockBuilder)
 	assert.NotNil(t, runtime.fsm.backend)
@@ -1790,16 +1790,13 @@ func TestConsensusRuntime_IsValidSender(t *testing.T) {
 		logger: hclog.NewNullLogger(),
 	}
 
+	require.NoError(t, runtime.FSM())
+
 	sender := validatorAccounts.getValidator("A")
 	msg, err := sender.Key().SignEcdsaMessage(&proto.Message{
 		From: sender.Address().Bytes(),
 	})
 	require.NoError(t, err)
-
-	// IsValidSender should return false in case FSM isn't (yet) initialized
-	require.False(t, runtime.IsValidSender(msg))
-
-	require.NoError(t, runtime.FSM())
 
 	assert.True(t, runtime.IsValidSender(msg))
 	blockchainMock.AssertExpectations(t)

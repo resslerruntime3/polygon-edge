@@ -76,9 +76,6 @@ type ValidatorSet interface {
 	// CalcProposer calculates next proposer based on the passed round
 	CalcProposer(round uint64) (types.Address, error)
 
-	// Includes checks if the passed address in included in the current validator set
-	Includes(address types.Address) bool
-
 	// Len returns the size of the validator set
 	Len() int
 
@@ -434,16 +431,6 @@ func (v *validatorSet) CalcProposer(round uint64) (types.Address, error) {
 	}
 
 	return v.proposer.Metadata.Address, nil
-}
-
-func (v *validatorSet) Includes(address types.Address) bool {
-	for _, validator := range v.validators {
-		if validator.Metadata.Address == address {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (v *validatorSet) Len() int {
