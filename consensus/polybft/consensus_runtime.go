@@ -326,6 +326,7 @@ func (c *consensusRuntime) FSM() error {
 	// to the head of their remote peers.
 	c.lock.RLock()
 	proposerSnapshot, ok := c.proposerCalculator.GetSnapshot()
+	//proposerSnapshot.logger = c.logger.Named("fsm_proposer_snapshot")
 
 	if !ok {
 		return errors.New("cannot retrieve priority snapshot for fsm")

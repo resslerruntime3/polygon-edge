@@ -45,7 +45,7 @@ type ProposerSnapshot struct {
 	Round      uint64
 	Proposer   *PrioritizedValidator
 	Validators []*PrioritizedValidator
-	logger     hclog.Logger
+	//logger     hclog.Logger
 }
 
 // NewProposerSnapshotFromState create ProposerSnapshot from state if possible or from genesis block
@@ -81,7 +81,7 @@ func NewProposerSnapshot(height uint64, validators []*ValidatorMetadata, logger 
 		Proposer:   nil,
 		Height:     height,
 		Validators: validatorsSnap,
-		logger:     logger,
+		//logger:     logger,
 	}
 }
 
@@ -106,7 +106,7 @@ func (pcs *ProposerSnapshot) CalcProposer(round, height uint64) (types.Address, 
 	pcs.Proposer = proposer
 	pcs.Round = round
 
-	pcs.logger.Info("New proposer calculated", "height", height, "round", round, "address", proposer.Metadata.Address)
+	//pcs.logger.Info("New proposer calculated", "height", height, "round", round, "address", proposer.Metadata.Address)
 
 	return proposer.Metadata.Address, nil
 }
@@ -115,13 +115,12 @@ func (pcs *ProposerSnapshot) CalcProposer(round, height uint64) (types.Address, 
 func (pcs *ProposerSnapshot) GetLatestProposer(round, height uint64) (types.Address, bool) {
 	// round must be same as saved one and proposer must exist
 	if pcs == nil || pcs.Proposer == nil || pcs.Round != round || pcs.Height != height {
-		pcs.logger.Info("Get latest proposer not found", "height", height, "round", round,
-			"pc height", pcs.Height, "pc round", pcs.Round)
-
+		// pcs.logger.Info("Get latest proposer not found", "height", height, "round", round,
+		// 	"pc height", pcs.Height, "pc round", pcs.Round)
 		return types.ZeroAddress, false
 	}
 
-	pcs.logger.Info("Get latest proposer", "height", height, "round", round, "address", pcs.Proposer.Metadata.Address)
+	//pcs.logger.Info("Get latest proposer", "height", height, "round", round, "address", pcs.Proposer.Metadata.Address)
 
 	return pcs.Proposer.Metadata.Address, true
 }
@@ -156,6 +155,7 @@ func (pcs *ProposerSnapshot) Copy() *ProposerSnapshot {
 		Height:     pcs.Height,
 		Round:      pcs.Round,
 		Proposer:   proposer,
+		//logger:     pcs.logger.Named("prposer_snapshot"),
 	}
 }
 
@@ -185,7 +185,7 @@ func NewProposerCalculator(config *runtimeConfig, logger hclog.Logger) (*Propose
 func NewProposerCalculatorFromSnapshot(pcs *ProposerSnapshot) *ProposerCalculator {
 	return &ProposerCalculator{
 		snapshot: pcs.Copy(),
-		logger:   pcs.logger,
+		logger:   hclog.Default(),
 	}
 }
 
